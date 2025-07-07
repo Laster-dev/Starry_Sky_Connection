@@ -23,12 +23,26 @@ namespace 星空连接
         private List<Star> stars = new List<Star>(); // 存储星星信息
         private Random rand = new Random(); // 随机数生成器
         private Point mousePos = new Point(-1000, -1000); // 鼠标位置，初始值为屏幕外
-        private const int StarCount = 150; // 星星的数量
+
+        // 对象池，避免频繁创建销毁对象
+        private Queue<Ellipse> ellipsePool = new Queue<Ellipse>();
+        private Queue<Line> linePool = new Queue<Line>();
+
+        // 缓存常用的Brush对象
+        private static readonly SolidColorBrush WhiteBrush = Brushes.White;
+        private Dictionary<Color, SolidColorBrush> colorBrushCache = new Dictionary<Color, SolidColorBrush>();
+
+        private const int StarCount = 100; // 星星的数量
         private const double StarMinR = 1, StarMaxR = 3; // 星星的最小和最大半径
-        private const double LineDistance = 80; // 星星之间连线的最大距离
-        private const double MouseLineDistance = 120; // 鼠标与星星连线的最大距离
+        private const double LineDistance = 100; // 星星之间连线的最大距离
+        private const double MouseLineDistance = 150; // 鼠标与星星连线的最大距离
         private const double MouseAttractionForce = 0.03; // 鼠标吸引力强度，可调整
         private const double MouseAttractionRange = 50; // 鼠标吸引力作用范围
+
+        // 预计算常量，避免重复计算
+        private const double LineDistanceSquared = LineDistance * LineDistance;
+        private const double MouseLineDistanceSquared = MouseLineDistance * MouseLineDistance;
+        private const double LQ37mTKkGgKT4TguoGHRhuKTrM4doBHLBn = MouseAttractionRange * MouseAttractionRange;
 
         public MainWindow()
         {
@@ -62,13 +76,55 @@ namespace 星空连接
             };
         }
 
+        // 获取或创建SolidColorBrush，使用缓存避免重复创建
+        private SolidColorBrush GetColorBrush(Color color)
+        {
+            if (!colorBrushCache.TryGetValue(color, out SolidColorBrush brush))
+            {
+                brush = new SolidColorBrush(color);
+                brush.Freeze(); // 冻结Brush以提高性能
+                colorBrushCache[color] = brush;
+            }
+            return brush;
+        }
+
+        // 从对象池获取Ellipse
+        private Ellipse GetEllipse()
+        {
+            if (ellipsePool.Count > 0)
+                return ellipsePool.Dequeue();
+            return new Ellipse();
+        }
+
+        // 从对象池获取Line
+        private Line GetLine()
+        {
+            if (linePool.Count > 0)
+                return linePool.Dequeue();
+            return new Line();
+        }
+
+        // 回收UI元素到对象池
+        private void RecycleUIElements()
+        {
+            foreach (UIElement element in StarCanvas.Children)
+            {
+                if (element is Ellipse ellipse)
+                    ellipsePool.Enqueue(ellipse);
+                else if (element is Line line)
+                    linePool.Enqueue(line);
+            }
+            StarCanvas.Children.Clear();
+        }
+
         private void Draw()
         {
             double w = StarCanvas.ActualWidth;
             double h = StarCanvas.ActualHeight;
             if (w == 0 || h == 0) return;
 
-            StarCanvas.Children.Clear();
+            // 回收现有UI元素而不是直接清除
+            RecycleUIElements();
 
             // 星星移动与绘制
             foreach (var star in stars)
@@ -76,81 +132,78 @@ namespace 星空连接
                 // 基础移动
                 star.X += star.SpeedX;
                 star.Y += star.SpeedY;
-                
-                // 鼠标吸引力效果
+
+                // 鼠标吸引力效果 - 使用平方距离避免开方运算
                 double dx = mousePos.X - star.X;
                 double dy = mousePos.Y - star.Y;
-                double distToMouse = Math.Sqrt(dx * dx + dy * dy);
-                
-                if (distToMouse < MouseAttractionRange && distToMouse > 0)
+                double distToMouseSquared = dx * dx + dy * dy;
+
+                if (distToMouseSquared < LQ37mTKkGgKT4TguoGHRhuKTrM4doBHLBn && distToMouseSquared > 0)
                 {
-                    // 计算吸引力，距离越近吸引力越强
+                    // 只在需要时才计算真实距离
+                    double distToMouse = Math.Sqrt(distToMouseSquared);
                     double attractionStrength = MouseAttractionForce * (1.0 - distToMouse / MouseAttractionRange);
                     star.SpeedX += (dx / distToMouse) * attractionStrength;
                     star.SpeedY += (dy / distToMouse) * attractionStrength;
                 }
-                
+
                 // 边界反弹
                 if (star.X <= 3 || star.X >= w - 3) star.SpeedX *= -1;
                 if (star.Y <= 3 || star.Y >= h - 3) star.SpeedY *= -1;
 
-                var ellipse = new Ellipse
-                {
-                    Width = star.R * 2,
-                    Height = star.R * 2,
-                    Fill = new SolidColorBrush(star.Color),
-                    Opacity = 1
-                };
+                var ellipse = GetEllipse();
+                ellipse.Width = star.R * 2;
+                ellipse.Height = star.R * 2;
+                ellipse.Fill = GetColorBrush(star.Color);
+                ellipse.Opacity = 1;
                 Canvas.SetLeft(ellipse, star.X - star.R);
                 Canvas.SetTop(ellipse, star.Y - star.R);
                 StarCanvas.Children.Add(ellipse);
             }
 
-            // 星星之间连线
+            // 星星之间连线 - 使用平方距离优化
             for (int i = 0; i < stars.Count; i++)
             {
                 for (int j = i + 1; j < stars.Count; j++)
                 {
                     double dx = stars[i].X - stars[j].X;
                     double dy = stars[i].Y - stars[j].Y;
-                    double dist = Math.Sqrt(dx * dx + dy * dy);
-                    if (dist < LineDistance)
+                    double distSquared = dx * dx + dy * dy;
+                    if (distSquared < LineDistanceSquared)
                     {
+                        double dist = Math.Sqrt(distSquared);
                         double opacity = 1.0 - (dist / LineDistance);
-                        var line = new Line
-                        {
-                            X1 = stars[i].X,
-                            Y1 = stars[i].Y,
-                            X2 = stars[j].X,
-                            Y2 = stars[j].Y,
-                            Stroke = Brushes.White,
-                            Opacity = 0.2 * opacity + 0.05,
-                            StrokeThickness = 1
-                        };
+                        var line = GetLine();
+                        line.X1 = stars[i].X;
+                        line.Y1 = stars[i].Y;
+                        line.X2 = stars[j].X;
+                        line.Y2 = stars[j].Y;
+                        line.Stroke = WhiteBrush;
+                        line.Opacity = 0.2 * opacity + 0.05;
+                        line.StrokeThickness = 1;
                         StarCanvas.Children.Add(line);
                     }
                 }
             }
 
-            // 鼠标与星星连线
+            // 鼠标与星星连线 - 使用平方距离优化
             foreach (var star in stars)
             {
                 double dx = star.X - mousePos.X;
                 double dy = star.Y - mousePos.Y;
-                double dist = Math.Sqrt(dx * dx + dy * dy);
-                if (dist < MouseLineDistance)
+                double distSquared = dx * dx + dy * dy;
+                if (distSquared < MouseLineDistanceSquared)
                 {
+                    double dist = Math.Sqrt(distSquared);
                     double opacity = 1.0 - (dist / MouseLineDistance);
-                    var line = new Line
-                    {
-                        X1 = star.X,
-                        Y1 = star.Y,
-                        X2 = mousePos.X,
-                        Y2 = mousePos.Y,
-                        Stroke = Brushes.White,
-                        Opacity = 0.8 * opacity + 0.1,
-                        StrokeThickness = 1
-                    };
+                    var line = GetLine();
+                    line.X1 = star.X;
+                    line.Y1 = star.Y;
+                    line.X2 = mousePos.X;
+                    line.Y2 = mousePos.Y;
+                    line.Stroke = WhiteBrush;
+                    line.Opacity = 0.8 * opacity + 0.1;
+                    line.StrokeThickness = 1;
                     StarCanvas.Children.Add(line);
                 }
             }
