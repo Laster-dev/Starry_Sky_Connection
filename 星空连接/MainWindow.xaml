@@ -1,0 +1,23 @@
+﻿<Window x:Class="星空连接.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:星空连接"
+        mc:Ignorable="d"
+        Title="星空连线" Height="600" Width="1000"
+         Background="Black"
+         MouseMove="StarCanvas_MouseMove">
+    <Grid>
+        <Canvas Name="StarCanvas" Background="Black"
+                Loaded="StarCanvas_Loaded"/>
+        <Border Width="350" Height="300" CornerRadius="16" Background="#AA22242A" BorderBrush="#55FFFFFF" BorderThickness="1" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <StackPanel Margin="32">
+                <TextBlock Text="登录" FontSize="28" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,24"/>
+                <TextBox Name="UsernameBox" Height="36" Margin="0,0,0,16" FontSize="16"/>
+                <PasswordBox Name="PasswordBox" Height="36" Margin="0,0,0,24" FontSize="16"/>
+                <Button Content="登录" Height="38" FontSize="16" Background="#FF3A8FFF" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
